@@ -11,20 +11,16 @@ extends RefCounted
 ## call the functions as BookAPI.function_name(parameters).
 
 
-
 # ==============================================================================
 # CONFIGURATION HELPERS
 # ==============================================================================
 
 ## Configures the visual properties of a Book instance via a dictionary.
-## Useful for loading saved states or generating books procedurally.
 static func configure_visuals(book: PageFlip2D, data: Dictionary) -> void:
 	if not is_instance_valid(book): return
 
 	if "pages" in data:
 		book.pages_paths = data["pages"]
-		# We access the private method via call to respect encapsulation or public API if made public.
-		# Since _prepare_book_content is internal, we trigger a rebuild implicitly or manually.
 		book.call("_prepare_book_content")
 
 	if "cover_front_out" in data: book.tex_cover_front_out = data["cover_front_out"]
@@ -46,7 +42,6 @@ static func configure_visuals(book: PageFlip2D, data: Dictionary) -> void:
 
 
 ## Configures the physics simulation of the page turning effect.
-## Keys match the properties in the PageRigger script (e.g., "paper_stiffness", "anim_duration").
 static func configure_physics(book: PageFlip2D, data: Dictionary) -> void:
 	if not is_instance_valid(book) or not book.dynamic_poly: return
 	
@@ -63,7 +58,6 @@ static func configure_physics(book: PageFlip2D, data: Dictionary) -> void:
 # ==============================================================================
 
 ## Locates the PageFlip2D controller ancestor from any node inside an interactive page.
-## Essential because the scene is buried inside Viewports and Slots.
 static func find_book_controller(caller_node: Node) -> PageFlip2D:
 	var current = caller_node
 	while current:
@@ -73,35 +67,72 @@ static func find_book_controller(caller_node: Node) -> PageFlip2D:
 	return null
 
 
-## Forces the book to jump to a specific page spread instantly or animated.
-static func go_to_spread(book: PageFlip2D, spread_index: int, animated: bool = true) -> void:
-	if not is_instance_valid(book): return
-	
-	# Clamp to valid range
-	var target = clampi(spread_index, -1, book.total_spreads)
-	
-	if not animated:
-		book.current_spread = target
-		book.call("_update_static_visuals_immediate")
-		book.call("_update_volume_visuals")
-	else:
-		# Simple logic: if target > current, turn next. 
-		# Note: Detailed multi-page skipping requires complex logic in the main controller.
-		# This represents a single step interaction.
-		if target > book.current_spread:
-			book.next_page()
-		elif target < book.current_spread:
-			book.prev_page()
-
-
-## Locks the book input, preventing the user from turning pages manually.
-## Useful when a puzzle or minigame is active inside the page.
+## Safely locks or unlocks the book's ability to turn pages manually.
+## WARNING: If locked, the interactive scene MUST be responsible for unlocking it later,
+## or calling go_to_spread() which forces an unlock at the end.
 static func set_interaction_lock(book: PageFlip2D, locked: bool) -> void:
 	if not is_instance_valid(book): return
-	
-	# This uses the internal handshake method.
-	# False means "don't give control to book" (so, locked for player navigation).
 	book.call("_pageflip_set_input_enabled", not locked)
+
+
+## Forces the book to regain input control immediately.
+## Useful as a failsafe if an interactive scene closes unexpectedly.
+static func force_release_control(book: PageFlip2D) -> void:
+	if not is_instance_valid(book): return
+	book.call("_pageflip_set_input_enabled", true)
+
+
+## Navigates to a specific spread.
+## [b]ASYNC:[/b] Must be called with 'await' if animated is true.
+## - Animated: Fast-forwards through pages and restores control at the end.
+## - Instant: Snaps to page and manually triggers the scene activation handshake.
+static func go_to_spread(book: PageFlip2D, target_spread: int, animated: bool = true) -> void:
+	if not is_instance_valid(book): return
+	
+	# Clamp target
+	var final_target = clampi(target_spread, -1, book.total_spreads)
+	var diff = final_target - book.current_spread
+	
+	force_release_control(book)
+
+	if diff == 0:
+		return
+	
+	if not animated:
+		# INSTANT TELEPORT
+		book.current_spread = final_target
+		book.call("_update_static_visuals_immediate")
+		book.call("_update_volume_visuals")
+		
+	else:
+		# ANIMATED FAST-FORWARD
+		if book.is_animating: return # Don't interrupt an existing animation
+		
+		var original_speed = book.anim_player.speed_scale
+		# Speed up significantly for the traversal (5x speed)
+		book.anim_player.speed_scale = 5.0
+		
+		var steps = abs(diff)
+		var going_forward = diff > 0
+		
+		for i in range(steps):
+			if not is_instance_valid(book): break
+			
+			if going_forward: book.next_page()
+			else: book.prev_page()
+			
+			# Wait for the physical page turn to finish before starting the next one.
+			# This ensures signals fire correctly and the stack updates physically.
+			if book.anim_player.is_playing():
+				await book.anim_player.animation_finished
+			else:
+				# Fallback if animation didn't start for some reason
+				await book.get_tree().process_frame
+		
+		# RESTORE STATE
+		if is_instance_valid(book):
+			book.anim_player.speed_scale = original_speed
+
 
 
 ## Checks if the book is currently playing a page-turn animation.
