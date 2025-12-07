@@ -175,6 +175,7 @@ enum CloseBehavior {
 ## External back cover texture.
 @export var tex_cover_back_out: Texture2D
 
+
 # ==============================================================================
 # 2. INTERNAL STATE
 # ==============================================================================
@@ -221,9 +222,11 @@ func _validate_property(property: Dictionary) -> void:
 		if close_behavior != CloseBehavior.CHANGE_SCENE:
 			property.usage = PROPERTY_USAGE_NO_EDITOR
 
+
 func _set_close_behavior(value):
 	close_behavior = value
 	notify_property_list_changed()
+
 
 func _apply_newold_config(val):
 	if not val: return
@@ -262,13 +265,14 @@ func _apply_newold_config(val):
 	_apply_new_size()
 	notify_property_list_changed()
 
+
 # ==============================================================================
 # BUILD & INIT
 # ==============================================================================
 func __init():
 	var viewports_cont = __ensure_node("Viewports", Node, self)
 	var slots_cont = __ensure_node("Slots", Node, viewports_cont)
-	var visual_cont = __ensure_node("Visual", Node2D, self) 
+	var visual_cont = __ensure_node("Visual", Node2D, self)
 
 	_slot_1 = __ensure_node("Slot1", SubViewport, slots_cont)
 	_slot_2 = __ensure_node("Slot2", SubViewport, slots_cont)
@@ -316,6 +320,7 @@ func __init():
 	if Vector2(_slot_1.size) != target_page_size:
 		_apply_new_size()
 
+
 func __ensure_node(target_name: String, type: Variant, parent_node: Node) -> Node:
 	var node = parent_node.get_node_or_null(target_name)
 	if node: return node
@@ -325,6 +330,7 @@ func __ensure_node(target_name: String, type: Variant, parent_node: Node) -> Nod
 	parent_node.add_child(node)
 	if Engine.is_editor_hint(): node.owner = parent_node.owner if parent_node.owner else self
 	return node
+
 
 func _ready():
 	if not _slot_1: _slot_1 = find_child("Slot1", true, false)
@@ -340,7 +346,6 @@ func _ready():
 		_apply_new_size()
 	
 	if dynamic_poly: dynamic_poly.rebuild(target_page_size)
-	#if vp_compositor: target_page_size = vp_compositor.size
 	
 	if not blank_page_texture:
 		var w = int(target_page_size.x)
@@ -364,15 +369,18 @@ func _ready():
 	
 	_initial_config()
 
+
 func _set_spine_color(color: Color) -> void:
 	spine_color = color
 	var node = find_child("RuntimeSpine")
 	if node: node.color = spine_color
 
+
 func _set_spine_texture(texture: Texture2D) -> void:
 	spine_texture = texture
 	var node = find_child("RuntimeSpine")
 	if node: node.texture = spine_texture
+
 
 func _initial_config():
 	if vp_compositor: page_width = float(vp_compositor.size.x)
@@ -398,6 +406,7 @@ func _initial_config():
 		_update_stack_direct(0.0, float(current_spread))
 		_update_static_visuals_immediate()
 	_update_volume_visuals()
+
 
 # ==============================================================================
 # VOLUME
@@ -430,8 +439,10 @@ func _generate_volume_layers():
 		layer_node.add_child(s_right)
 		_volume_root.add_child(layer_node)
 
+
 func _tween_expansion_only(factor: float):
 	_update_stack_direct(factor, _visual_spread_index)
+
 
 func _update_stack_direct(expansion_factor: float, visual_spread: float):
 	_current_expansion_factor = expansion_factor
@@ -497,6 +508,7 @@ func _update_stack_direct(expansion_factor: float, visual_spread: float):
 			r_node.position = static_right.position + final_off_right
 			r_node.visible = show_r
 
+
 func _get_layer_count_for_spread(spread_idx: float, total_layers: int) -> int:
 	if total_spreads <= 2: return 0
 	var effective_total = float(total_spreads - 2)
@@ -506,9 +518,11 @@ func _get_layer_count_for_spread(spread_idx: float, total_layers: int) -> int:
 	var ratio = safe_spread / real_max
 	return int(round(ratio * total_layers))
 
+
 func _update_volume_visuals():
 	if not _volume_root: return
 	_volume_root.position = volume_stack_offset
+
 
 # ==============================================================================
 # EDITOR TOOLS & SIZING
@@ -517,6 +531,7 @@ func _on_apply_size_pressed(val):
 	if not val: return
 	apply_size_change = false
 	_apply_new_size()
+
 
 func _apply_new_size():
 	print("[BookController] Rebuilding Book with size: ", target_page_size)
@@ -532,18 +547,20 @@ func _apply_new_size():
 	if static_right:
 		static_right.polygon = poly_shape; static_right.uv = uv_rect; static_right.position = Vector2(0, 0); static_right.visible = true
 	if dynamic_poly:
-		dynamic_poly.position = Vector2(0.0, -h / 2.0); dynamic_poly.visible = false 
+		dynamic_poly.position = Vector2(0.0, -h / 2.0); dynamic_poly.visible = false
 		if dynamic_poly.has_method("rebuild"): dynamic_poly.rebuild(target_page_size)
 
 	_build_spine()
 	_generate_volume_layers()
 	_fit_camera_to_book()
 
+
 func _update_viewports_recursive(node: Node, new_size: Vector2):
 	for child in node.get_children():
 		if child is SubViewport:
-			child.size = new_size; child.render_target_update_mode = SubViewport.UPDATE_ALWAYS 
+			child.size = new_size; child.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 		if child.get_child_count() > 0: _update_viewports_recursive(child, new_size)
+
 
 func _fit_camera_to_book():
 	var cam = get_node_or_null("Camera2D")
@@ -560,16 +577,17 @@ func _fit_camera_to_book():
 	var final_zoom = min(zoom_x, zoom_y)
 	cam.zoom = Vector2(final_zoom, final_zoom)
 
+
 func _build_spine():
 	if _spine_poly and is_instance_valid(_spine_poly): _spine_poly.queue_free()
-	elif visuals_container.has_node("RuntimeSpine"): 
+	elif visuals_container.has_node("RuntimeSpine"):
 		var node = visuals_container.get_node("RuntimeSpine")
 		node.queue_free()
 		visuals_container.remove_child(node)
 	if spine_width <= 0: return
 	_spine_poly = Polygon2D.new()
 	_spine_poly.name = "RuntimeSpine"
-	_spine_poly.z_index = 15 
+	_spine_poly.z_index = 15
 	_spine_poly.texture = spine_texture
 	var hw = spine_width / 2.0
 	var h = target_page_size.y
@@ -580,12 +598,14 @@ func _build_spine():
 		_spine_poly.uv = PackedVector2Array([Vector2(0, 0), Vector2(tw, 0), Vector2(tw, th), Vector2(0, th)])
 	else: _spine_poly.color = spine_color
 	visuals_container.add_child(_spine_poly)
-	_spine_poly.position = Vector2.ZERO 
+	_spine_poly.position = Vector2.ZERO
 	if Engine.is_editor_hint(): _spine_poly.owner = get_tree().edited_scene_root
+
 
 func _set_page_visible(node: Node2D, show: bool):
 	if show: node.visible = true
 	else: node.call_deferred("set_visible", false)
+
 
 func _prepare_book_content():
 	_runtime_pages = pages_paths.duplicate()
@@ -595,11 +615,12 @@ func _prepare_book_content():
 	if num == 0: total_spreads = 1
 	else: total_spreads = (num / 2) + 1
 
+
 # ==============================================================================
 # INPUT
 # ==============================================================================
 func _input(event):
-	if not _active_interactive_is_left and not _active_interactive_is_right: return 
+	if not _active_interactive_is_left and not _active_interactive_is_right: return
 	if event is InputEventMouse:
 		var mouse_pos = get_global_mouse_position()
 		if _active_interactive_is_left:
@@ -620,6 +641,7 @@ func _input(event):
 		if _active_interactive_is_left: _slot_1.push_input(event.duplicate(true))
 		if _active_interactive_is_right: _slot_2.push_input(event.duplicate(true))
 
+
 func _unhandled_input(event):
 	if Engine.is_editor_hint(): return
 	if not visible or is_animating: return
@@ -638,13 +660,16 @@ func _unhandled_input(event):
 		if local_pos.x > -page_width/2.0: next_page(); get_viewport().set_input_as_handled()
 		else: prev_page(); get_viewport().set_input_as_handled()
 
+
 func next_page():
 	if is_animating or current_spread >= total_spreads: return
 	_start_animation(true)
 
+
 func prev_page():
 	if is_animating or current_spread <= -1: return
 	_start_animation(false)
+
 
 func _pageflip_set_input_enabled(give_control_to_book: bool):
 	set_process_unhandled_input(give_control_to_book)
@@ -661,6 +686,7 @@ func _pageflip_set_input_enabled(give_control_to_book: bool):
 			node.set_process_unhandled_input(not give_control_to_book)
 			_active_interactive_is_right = not give_control_to_book
 
+
 ## start from the current visual state and end at the cover.
 func force_close_book(to_front_cover: bool):
 	if is_animating: return
@@ -673,7 +699,7 @@ func force_close_book(to_front_cover: bool):
 		# To Front Cover = Closing Backwards (Right to Left)
 		# We don't change current_spread here. We let the animation run.
 		# The target is logically -1, but we handle the jump at end of animation.
-		_start_animation(false) 
+		_start_animation(false)
 	else:
 		# To Back Cover = Closing Forwards (Left to Right)
 		_start_animation(true)
@@ -724,19 +750,13 @@ func _start_animation(forward: bool):
 	
 	if _is_force_closing:
 		if forward: # Closing to Back (Left to Right motion)
-			# The Static Left stays as the Current Left Page.
 			idx_static_left = _get_page_index_for_spread(current_spread, true)
-			# The Static Right must be empty/cover underneath.
-			idx_static_right = -999 
-			# Moving Part: The Current Right Page flips over to become the Back Cover.
+			idx_static_right = -999
 			idx_anim_a = _get_page_index_for_spread(current_spread, false)
 			idx_anim_b = -103 # Back Cover Out
 		else: # Closing to Front (Right to Left motion)
-			# The Static Right stays as the Current Right Page.
 			idx_static_right = _get_page_index_for_spread(current_spread, false)
-			# The Static Left must be empty.
 			idx_static_left = -999
-			# Moving Part: The Current Left Page flips over to become the Front Cover.
 			idx_anim_a = _get_page_index_for_spread(current_spread, true)
 			idx_anim_b = -100 # Front Cover Out
 	else:
@@ -744,13 +764,13 @@ func _start_animation(forward: bool):
 		if forward:
 			idx_static_left = _get_page_index_for_spread(current_spread, true)
 			idx_static_right = _get_page_index_for_spread(target_spread_idx, false)
-			idx_anim_a = _get_page_index_for_spread(current_spread, false) 
-			idx_anim_b = _get_page_index_for_spread(target_spread_idx, true) 
+			idx_anim_a = _get_page_index_for_spread(current_spread, false)
+			idx_anim_b = _get_page_index_for_spread(target_spread_idx, true)
 		else:
 			idx_static_left = _get_page_index_for_spread(target_spread_idx, true)
 			idx_static_right = _get_page_index_for_spread(current_spread, false)
-			idx_anim_a = _get_page_index_for_spread(current_spread, true) 
-			idx_anim_b = _get_page_index_for_spread(target_spread_idx, false) 
+			idx_anim_a = _get_page_index_for_spread(current_spread, true)
+			idx_anim_b = _get_page_index_for_spread(target_spread_idx, false)
 
 	_update_slot_content(_slot_1, idx_static_left)
 	_update_slot_content(_slot_2, idx_static_right)
@@ -765,13 +785,16 @@ func _start_animation(forward: bool):
 	if closing_to_back: _set_page_visible.call_deferred(static_right, false)
 	elif closing_to_front: _set_page_visible.call_deferred(static_left, false)
 	
-	var anim_name = "turn_rigid_page" if is_rigid_motion else "turn_flexible_page"
+	# --- ANIMATION SELECTION (Standard vs Mirror) ---
+	var base_anim_name = "turn_rigid_page" if is_rigid_motion else "turn_flexible_page"
+	var final_anim_name = base_anim_name if forward else base_anim_name + "_mirror"
+	
 	var anim_len = 1.0
-	if anim_player.has_animation(anim_name):
-		anim_len = anim_player.get_animation(anim_name).length
-		anim_player.current_animation = anim_name
-		if forward: anim_player.seek(0.0, true)
-		else: anim_player.seek(anim_len, true)
+	if anim_player.has_animation(final_anim_name):
+		anim_len = anim_player.get_animation(final_anim_name).length
+		anim_player.current_animation = final_anim_name
+		# Always seek to 0 because mirror animations are created to play forwards
+		anim_player.seek(0.0, true)
 
 	_set_page_visible.call_deferred(dynamic_poly, true); dynamic_poly.z_index = 10
 	_update_stack_direct(_current_expansion_factor, float(current_spread))
@@ -817,18 +840,20 @@ func _start_animation(forward: bool):
 	
 	tween.tween_method(_tween_expansion_only.bind(), start_exp, end_exp, motion_duration)
 
-	if forward: anim_player.play(anim_name)
-	else: anim_player.play_backwards(anim_name)
+	# Play the selected animation normally (No play_backwards)
+	anim_player.play(final_anim_name)
 	
 	if is_rigid_motion:
 		var trigger_time = max(0.0, motion_duration - impact_sync_offset)
 		get_tree().create_timer(trigger_time).timeout.connect(func(): _play_sound(sfx_book_impact))
 	else: _play_sound(sfx_page_flip)
 
+
 func _on_page_landed_early():
 	_is_page_flying = false
 	_visual_spread_index = float(_pending_target_spread_idx)
 	_update_stack_direct(_current_expansion_factor, _visual_spread_index)
+
 
 # ==============================================================================
 # PROCESS
@@ -837,6 +862,7 @@ func _process(_delta):
 	if visuals_container and is_animating:
 		_update_stack_direct(_current_expansion_factor, _visual_spread_index)
 		_update_volume_visuals()
+
 
 func _get_compensation_offset(is_closed: bool, is_back: bool) -> Vector2:
 	var target_local_x = 0.0
@@ -852,6 +878,7 @@ func _get_compensation_offset(is_closed: bool, is_back: bool) -> Vector2:
 	target_vec = target_vec.rotated(deg_to_rad(t_rot))
 	return -target_vec
 
+
 func _animate_container_transform(target_is_closed: bool, is_back: bool, duration: float):
 	if not visuals_container: return
 	var t_scale = closed_scale if target_is_closed else open_scale
@@ -866,9 +893,11 @@ func _animate_container_transform(target_is_closed: bool, is_back: bool, duratio
 		tween.tween_property(visuals_container, "skew", t_skew, duration)
 		tween.tween_property(visuals_container, "rotation", deg_to_rad(t_rot), duration)
 
+
 func _play_sound(stream: AudioStream):
 	if not audio_player or not stream: return
 	audio_player.stream = stream; audio_player.pitch_scale = randf_range(0.95, 1.05); audio_player.play()
+
 
 # ==============================================================================
 # CORE SIGNALS
@@ -876,6 +905,7 @@ func _play_sound(stream: AudioStream):
 func _on_midpoint_signal():
 	compositor_sprite.texture = _slot_4.get_texture()
 	compositor_sprite.flip_h = !compositor_sprite.flip_h
+
 
 func _on_animation_finished(_anim_name: String):
 	_set_page_visible(dynamic_poly, false)
@@ -891,10 +921,10 @@ func _on_animation_finished(_anim_name: String):
 		else: current_spread = -1
 	else:
 		# Standard increment
-		if going_forward and current_spread == -1: current_spread = 0; 
-		elif going_forward and current_spread == total_spreads - 1: current_spread = total_spreads; 
-		elif !going_forward and current_spread == total_spreads: current_spread = total_spreads - 1; 
-		elif !going_forward and current_spread == 0: current_spread = -1; 
+		if going_forward and current_spread == -1: current_spread = 0
+		elif going_forward and current_spread == total_spreads - 1: current_spread = total_spreads
+		elif !going_forward and current_spread == total_spreads: current_spread = total_spreads - 1
+		elif !going_forward and current_spread == 0: current_spread = -1
 		else:
 			if going_forward: current_spread += 1
 			else: current_spread -= 1
@@ -915,10 +945,12 @@ func _on_animation_finished(_anim_name: String):
 			return
 	_check_scene_activation.call_deferred()
 
+
 func _perform_close_action():
 	if close_behavior == CloseBehavior.DESTROY_BOOK: queue_free()
 	elif close_behavior == CloseBehavior.CHANGE_SCENE:
 		if target_scene_on_close != "": get_tree().change_scene_to_file(target_scene_on_close)
+
 
 func _check_scene_activation() -> void:
 	var scene_found = false
@@ -933,6 +965,7 @@ func _check_scene_activation() -> void:
 			node.emit_signal("manage_pageflip", false)
 			node.set_process_input(true); node.set_process_unhandled_input(true); scene_found = true
 	if not scene_found: _pageflip_set_input_enabled(true)
+
 
 # ==============================================================================
 # ASSET LOADING & SLOT MANAGEMENT
@@ -949,6 +982,7 @@ func _get_page_index_for_spread(spread_idx: int, is_left: bool) -> int:
 		var content_idx = spread_idx * 2
 		if content_idx >= _runtime_pages.size(): return -102 # Back Cover In
 		return content_idx
+
 
 func _update_slot_content(slot: SubViewport, content_index: int) -> void:
 	if not slot: return
@@ -973,9 +1007,10 @@ func _update_slot_content(slot: SubViewport, content_index: int) -> void:
 			else: _setup_texture_in_slot(slot, blank_page_texture)
 	else: _setup_texture_in_slot(slot, blank_page_texture)
 
+
 func _setup_texture_in_slot(slot: SubViewport, tex: Texture2D):
 	if enable_composite_pages: _add_composite_blank_bg(slot)
-	if not tex: 
+	if not tex:
 		tex = blank_page_texture
 		if not tex: return
 	var rect = TextureRect.new()
@@ -985,6 +1020,7 @@ func _setup_texture_in_slot(slot: SubViewport, tex: Texture2D):
 	rect.size = slot.size
 	rect.position = Vector2.ZERO
 	slot.add_child(rect)
+
 
 func _setup_scene_in_slot(slot: SubViewport, scene_pkg: PackedScene, texture_index: int):
 	if enable_composite_pages: _add_composite_blank_bg(slot)
@@ -1003,6 +1039,7 @@ func _setup_scene_in_slot(slot: SubViewport, scene_pkg: PackedScene, texture_ind
 		else: slot.add_child(instance)
 	instance.set_process_input(false); instance.set_process_unhandled_input(false)
 
+
 func _add_composite_blank_bg(slot: SubViewport):
 	if not blank_page_texture: return
 	var bg = TextureRect.new()
@@ -1012,6 +1049,7 @@ func _add_composite_blank_bg(slot: SubViewport):
 	bg.size = slot.size
 	bg.position = Vector2.ZERO
 	slot.add_child(bg)
+
 
 func _update_static_visuals_immediate():
 	var idx_l = _get_page_index_for_spread(current_spread, true)
