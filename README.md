@@ -31,7 +31,7 @@ You can render static textures, animated videos, or **fully functional interacti
 
 ## 📦 Installation
 
-1.  **Extract:** Move the folder included in the `.rar` file directly into your Godot project folder.
+1.  **Extract:** Copy the addons folder directly into your Godot project folder.
 2.  **Import:** Open Godot and allow the engine to import the scripts and assets.
 
 ---
