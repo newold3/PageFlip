@@ -12,6 +12,17 @@ extends RefCounted
 
 
 # ==============================================================================
+# ENUMS (Mirrored for easy access)
+# ==============================================================================
+
+enum JumpTarget {
+	FRONT_COVER,
+	BACK_COVER,
+	CONTENT_PAGE
+}
+
+
+# ==============================================================================
 # CONFIGURATION HELPERS
 # ==============================================================================
 
@@ -84,7 +95,7 @@ static func force_release_control(book: PageFlip2D) -> void:
 
 ## Navigates to a specific spread.
 ## [b]ASYNC:[/b] Must be called with 'await' if animated is true.
-## - Animated: Fast-forwards through pages and restores control at the end.
+## - Animated: Fast-forwards through pages with dynamic speed and restores control at the end.
 ## - Instant: Snaps to page and manually triggers the scene activation handshake.
 static func go_to_spread(book: PageFlip2D, target_spread: int, animated: bool = true) -> void:
 	if not is_instance_valid(book): return
@@ -109,10 +120,15 @@ static func go_to_spread(book: PageFlip2D, target_spread: int, animated: bool = 
 		if book.is_animating: return # Don't interrupt an existing animation
 		
 		var original_speed = book.anim_player.speed_scale
-		# Speed up significantly for the traversal (5x speed)
-		book.anim_player.speed_scale = 5.0
 		
+		# --- DYNAMIC SPEED CALCULATION ---
 		var steps = abs(diff)
+		# Base speed: 1.5x
+		# Increment: +0.5x per page
+		# Cap: 15.0x (Very fast zip)
+		var dynamic_speed = clampf(1.5 + (steps * 0.5), 1.5, 15.0)
+		book.anim_player.speed_scale = dynamic_speed
+		
 		var going_forward = diff > 0
 		
 		for i in range(steps):
@@ -122,17 +138,39 @@ static func go_to_spread(book: PageFlip2D, target_spread: int, animated: bool = 
 			else: book.prev_page()
 			
 			# Wait for the physical page turn to finish before starting the next one.
-			# This ensures signals fire correctly and the stack updates physically.
 			if book.anim_player.is_playing():
 				await book.anim_player.animation_finished
 			else:
-				# Fallback if animation didn't start for some reason
 				await book.get_tree().process_frame
 		
 		# RESTORE STATE
 		if is_instance_valid(book):
 			book.anim_player.speed_scale = original_speed
 
+
+## Navigates to a specific page number (1-based index).
+## Acts as a wrapper for go_to_spread, calculating the correct index automatically.
+## [b]ASYNC:[/b] Must be called with 'await' if animated is true.
+## [param page_num]: The 1-based page number (1 = first texture in pages_paths).
+## [param target]: Specifies if the target is a content page or a cover.
+static func go_to_page(book: PageFlip2D, page_num: int = 1, target: JumpTarget = JumpTarget.CONTENT_PAGE, animated: bool = true) -> void:
+	if not is_instance_valid(book): return
+	
+	var target_spread_idx: int = 0
+	
+	match target:
+		JumpTarget.FRONT_COVER:
+			target_spread_idx = -1
+		JumpTarget.BACK_COVER:
+			target_spread_idx = book.total_spreads
+		JumpTarget.CONTENT_PAGE:
+			# Calculate spread index: 1-2 -> Spread 0, 3-4 -> Spread 1, etc.
+			# Spread 0 usually shows Page 1 on the Right.
+			var safe_page = max(1, page_num)
+			target_spread_idx = int(safe_page / 2.0)
+			target_spread_idx = clampi(target_spread_idx, 0, book.total_spreads - 1)
+	
+	await go_to_spread(book, target_spread_idx, animated)
 
 
 ## Checks if the book is currently playing a page-turn animation.
