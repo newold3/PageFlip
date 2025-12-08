@@ -4,7 +4,7 @@
 
 <div align="center">
   <a href="https://www.youtube.com/watch?v=uvx7dPstcvg" alt="Click to watch on YouTube">
-    <img src="https://i.ibb.co/99pWs7GV/preview-ezgif-com-resize.gif" alt="video preview" border="0">
+    <img src="https://i.ibb.co/yn3cKH0K/preview-ezgif-com-speed.gif" border="0">
   </a>
 </div>
 
