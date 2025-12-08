@@ -1,6 +1,6 @@
 # Ultimate PageFlip for Godot
 
-**A robust, "Fake 3D" book system for Godot Engine.**
+**A robust, "Fake 3D" book system for Godot Engine.** (Click on the image to see a video demonstration)
 
 
 <p align="center">
