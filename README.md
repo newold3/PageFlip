@@ -2,12 +2,12 @@
 
 **A robust, "Fake 3D" book system for Godot Engine.** (Click on the image to see a video demonstration)
 
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=uvx7dPstcvg">
-    <img src="thumbnail.png" alt="Video thumbnail — click to watch on YouTube" width="300">
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=uvx7dPstcvg" alt="Click to watch on YouTube">
+    <img src="https://i.ibb.co/99pWs7GV/preview-ezgif-com-resize.gif" alt="video preview" border="0">
   </a>
-</p>
+</div>
+
 
 This tool allows you to create fully animated books, journals, grimoires, or UI menus. Unlike simple sprite swappers, this system uses real-time vertex deformation to bend pages, supports simulated page thickness (volume), and—most importantly—supports **Interactive Viewport Content**.
 
