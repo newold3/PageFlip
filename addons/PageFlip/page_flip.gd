@@ -27,6 +27,7 @@ enum PageStretchOption {
 	KEEP_ASPECT_COVERED = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 }
 
+
 ## Defines the condition required to trigger the book closing sequence.
 enum CloseCondition {
 	## The book will never close automatically.
@@ -43,6 +44,7 @@ enum CloseCondition {
 	DELEGATED
 }
 
+
 ## Defines what happens to the Book node after it closes.
 enum CloseBehavior {
 	## The Book node is deleted from the scene tree (queue_free).
@@ -51,10 +53,34 @@ enum CloseBehavior {
 	CHANGE_SCENE
 }
 
+
+## Defines the initial state of the book when the scene loads.
+enum StartOption {
+	## The book starts fully closed showing the front cover.
+	CLOSED_FROM_FRONT,
+	## The book starts fully closed showing the back cover.
+	CLOSED_FROM_BACK,
+	## The book starts open at a specific page number defined in 'start_page'.
+	OPEN_AT_PAGE
+}
+
+
+## Defines the target destination for the go_to_page function.
+enum JumpTarget {
+	## Jumps to a specific content page number (using the 'page_num' parameter).
+	CONTENT_PAGE,
+	## Jumps to the closed state showing the Front Cover.
+	FRONT_COVER,
+	## Jumps to the closed state showing the Back Cover.
+	BACK_COVER
+}
+
+
 @export_category("Newold Config")
 ## Apply the custom configuration defined by Newold (Size, Physics, Layers).
 ## Clicking this will overwrite current physics and sizing settings with the recommended preset.
 @export var apply_newold_preset: bool = false : set = _apply_newold_config
+
 
 # ==============================================================================
 # 1. REFERENCES & CONFIGURATION
@@ -71,13 +97,23 @@ enum CloseBehavior {
 ## Animation player handling the page flip sequences.
 @export var anim_player: AnimationPlayer
 
+
 @export_category("Compositor (Dynamic Texture)")
 ## SubViewport used to render the page content dynamically before applying it to the mesh.
 @export var vp_compositor: SubViewport
 ## Sprite inside the viewport showing the current page content.
 @export var compositor_sprite: Sprite2D
 
+
 @export_category("Book Logic & Closing")
+## Determines the initial state of the book (closed or open at specific page).
+@export var start_option: StartOption = StartOption.CLOSED_FROM_FRONT : set = _set_start_option
+## The page number to open at startup. Only visible if start_option is OPEN_AT_PAGE.[br][br]
+## If any of the pages that remain open are interactive scenes,
+## the script will automatically transfer control to them.[br][br]
+## Note: Since an even page (Left) and the next odd page (Right) share the same spread,
+## selecting either of them will result in the book opening to the same visual state.
+@export var start_page: int = 1
 ## Determines when the book should perform the close action (e.g., destroy or change scene).
 @export var close_condition: CloseCondition = CloseCondition.NEVER
 ## Determines what happens when the book closes (Destroy or Change Scene).
@@ -87,6 +123,7 @@ enum CloseBehavior {
 ## If true, pages with transparency will be composited over the 'Blank Page' texture/color.
 ## Useful for PNG notes or decals that need a paper background.
 @export var enable_composite_pages: bool = false
+
 
 @export_category("Styling & Spine")
 ## Base color for pages without texture content or the background of composite pages.
@@ -101,6 +138,7 @@ enum CloseBehavior {
 @export var spine_width: float = 40.0
 ## Determines if the front and back covers behave as rigid bodies (hard cover) or flexible (soft cover).
 @export var covers_are_rigid: bool = true
+
 
 # ==============================================================================
 # FAKE 3D TRANSFORM SETTINGS
@@ -121,6 +159,7 @@ enum CloseBehavior {
 @export var open_skew: float = 0.0
 ## Rotation (degrees) of the book when open.
 @export var open_rotation: float = 0.0
+
 
 # ==============================================================================
 # FAKE 3D VOLUME (PAGES)
@@ -145,6 +184,7 @@ enum CloseBehavior {
 ## Time in seconds before the animation ends to "land" the page on the stack visually.
 @export var landing_overlap: float = 0.15
 
+
 @export_category("Audio")
 ## Sound played when a rigid cover slams shut.
 @export var sfx_book_impact: AudioStream
@@ -155,11 +195,13 @@ enum CloseBehavior {
 ## AudioStreamPlayer node used for feedback.
 @export var audio_player: AudioStreamPlayer
 
+
 @export_category("Book Size Control")
 ## Target size (Resolution) for the book pages. Affects Viewports and Meshes.
 @export var target_page_size: Vector2 = Vector2(512, 820)
 ## Button to apply size changes in the editor.
 @export var apply_size_change: bool = false : set = _on_apply_size_pressed
+
 
 @export_category("Content Source")
 ## List of paths to textures (*.png, *.jpg) or PackedScenes (*.tscn) for pages.
@@ -216,15 +258,28 @@ var _pending_target_spread_idx: int = 0
 # Flag to handle forced closing animation state (API force_close_book)
 var _is_force_closing: bool = false
 
+# Flags to handle jump-to-page logic
+var _is_jumping: bool = false
+var _jump_target_spread: int = 0
+
 
 func _validate_property(property: Dictionary) -> void:
 	if property.name == "target_scene_on_close":
 		if close_behavior != CloseBehavior.CHANGE_SCENE:
 			property.usage = PROPERTY_USAGE_NO_EDITOR
+	
+	if property.name == "start_page":
+		if start_option != StartOption.OPEN_AT_PAGE:
+			property.usage = PROPERTY_USAGE_NO_EDITOR
 
 
 func _set_close_behavior(value):
 	close_behavior = value
+	notify_property_list_changed()
+
+
+func _set_start_option(value):
+	start_option = value
 	notify_property_list_changed()
 
 
@@ -357,6 +412,19 @@ func _ready():
 
 	_prepare_book_content()
 	
+	# Initial State Logic
+	if not Engine.is_editor_hint():
+		match start_option:
+			StartOption.CLOSED_FROM_FRONT:
+				current_spread = -1
+			StartOption.CLOSED_FROM_BACK:
+				current_spread = total_spreads
+			StartOption.OPEN_AT_PAGE:
+				# Calculate spread from page number (1-based index)
+				# Page 1, 2 -> Spread 0. Page 3, 4 -> Spread 1.
+				var spread_idx = int(floor((start_page - 1) / 2.0))
+				current_spread = clampi(spread_idx, 0, total_spreads - 1)
+	
 	if dynamic_poly and not dynamic_poly.is_connected("change_page_requested", _on_midpoint_signal):
 		dynamic_poly.connect("change_page_requested", _on_midpoint_signal)
 	
@@ -386,26 +454,35 @@ func _initial_config():
 	if vp_compositor: page_width = float(vp_compositor.size.x)
 	else: page_width = target_page_size.x
 	var screen_center = get_viewport().get_camera_2d().get_screen_center_position()
-	_set_page_visible(static_left, false)
+	
+	# Ensure dynamic poly is hidden at start.
+	# We DO NOT set static pages visibility here, because _update_static_visuals_immediate()
+	# below will set it correctly based on current_spread.
 	_set_page_visible(dynamic_poly, false)
-	_set_page_visible(static_right, true)
+	
 	_build_spine()
 	_generate_volume_layers()
 	_visual_spread_index = float(current_spread)
 	
-	if current_spread == -1:
-		var offset = _get_compensation_offset(true, false)
+	var is_closed = (current_spread == -1 or current_spread == total_spreads)
+	is_book_open = not is_closed
+	var is_back = (current_spread == total_spreads)
+	
+	if is_closed:
+		var offset = _get_compensation_offset(true, is_back)
 		visuals_container.global_position = screen_center + offset - Vector2(target_page_size.x / 2, 0.0)
-		_animate_container_transform(true, false, 0.0)
-		_update_stack_direct(1.0, -1.0)
-		_update_static_visuals_immediate()
+		_animate_container_transform(true, is_back, 0.0)
+		if is_back: _update_stack_direct(1.0, float(total_spreads))
+		else: _update_stack_direct(1.0, -1.0)
 	else:
 		var offset = _get_compensation_offset(false, false)
 		visuals_container.global_position = screen_center + offset - Vector2(target_page_size.x / 2, 0.0)
 		_animate_container_transform(false, false, 0.0)
 		_update_stack_direct(0.0, float(current_spread))
-		_update_static_visuals_immediate()
+	
+	_update_static_visuals_immediate()
 	_update_volume_visuals()
+	_check_scene_activation.call_deferred()
 
 
 # ==============================================================================
@@ -603,8 +680,8 @@ func _build_spine():
 
 
 func _set_page_visible(node: Node2D, show: bool):
-	if show: node.visible = true
-	else: node.call_deferred("set_visible", false)
+	# Simplified to immediate visibility to prevent race conditions during initialization
+	if node: node.visible = show
 
 
 func _prepare_book_content():
@@ -687,6 +764,46 @@ func _pageflip_set_input_enabled(give_control_to_book: bool):
 			_active_interactive_is_right = not give_control_to_book
 
 
+## Internal function (formerly go_to_page) that handles the actual jump logic 
+## using specific spread indices.
+func _go_to_page(target_spread_idx: int) -> void:
+	if is_animating: return
+	
+	if target_spread_idx == current_spread:
+		return
+		
+	var forward = target_spread_idx > current_spread
+	
+	_pageflip_set_input_enabled(true)
+	
+	_is_jumping = true
+	_jump_target_spread = target_spread_idx
+	
+	_start_animation(forward)
+
+
+## API to jump to a specific page or cover.
+## [param page_num]: The 1-based page number (1 = first texture in pages_paths).
+## [param target]: Specifies if the target is a content page or a cover.
+func go_to_page(page_num: int = 1, target: JumpTarget = JumpTarget.CONTENT_PAGE) -> void:
+	if is_animating: return
+	
+	var target_spread_idx: int = 0
+	
+	match target:
+		JumpTarget.FRONT_COVER:
+			target_spread_idx = -1
+		JumpTarget.BACK_COVER:
+			target_spread_idx = total_spreads
+		JumpTarget.CONTENT_PAGE:
+			var safe_page = max(1, page_num)
+			target_spread_idx = int(safe_page / 2.0)
+			
+			target_spread_idx = clampi(target_spread_idx, 0, total_spreads - 1)
+	
+	_go_to_page(target_spread_idx)
+
+
 ## start from the current visual state and end at the cover.
 func force_close_book(to_front_cover: bool):
 	if is_animating: return
@@ -723,8 +840,18 @@ func _start_animation(forward: bool):
 		else: # Closing to Front
 			target_spread_idx = -1
 			is_rigid_motion = covers_are_rigid; use_tween = true; is_book_open = false; closing_to_front = true; target_is_closed = true
+	elif _is_jumping:
+		# When jumping, we check if the TARGET spread is a closed state (covers)
+		target_spread_idx = _jump_target_spread
+		if target_spread_idx == -1:
+			is_rigid_motion = covers_are_rigid; use_tween = true; is_book_open = false; closing_to_front = true; target_is_closed = true
+		elif target_spread_idx == total_spreads:
+			is_rigid_motion = covers_are_rigid; use_tween = true; is_book_open = false; closing_to_back = true; target_is_closed = true
+		else:
+			# Standard jump between internal pages uses flexible animation
+			is_rigid_motion = false; use_tween = false; is_book_open = true; target_is_closed = false
 	else:
-		# Standard Animation
+		# Standard Sequential Animation
 		target_spread_idx = current_spread + 1 if forward else current_spread - 1
 		
 		if forward:
@@ -759,6 +886,21 @@ func _start_animation(forward: bool):
 			idx_static_left = -999
 			idx_anim_a = _get_page_index_for_spread(current_spread, true)
 			idx_anim_b = -100 # Front Cover Out
+	elif _is_jumping:
+		if forward: # Jumping Forward
+			# Visual Logic: Lift the current Right page, Reveal the Target Right page.
+			# The back of the flying page becomes the Target Left page.
+			idx_static_left = _get_page_index_for_spread(current_spread, true) # Remains current left
+			idx_static_right = _get_page_index_for_spread(target_spread_idx, false) # Revealed destination right
+			idx_anim_a = _get_page_index_for_spread(current_spread, false) # Current right flies
+			idx_anim_b = _get_page_index_for_spread(target_spread_idx, true) # Destination left lands
+		else: # Jumping Backward
+			# Visual Logic: Lift the current Left page, Reveal the Target Left page.
+			# The front of the flying page becomes the Target Right page.
+			idx_static_left = _get_page_index_for_spread(target_spread_idx, true) # Revealed destination left
+			idx_static_right = _get_page_index_for_spread(current_spread, false) # Remains current right
+			idx_anim_a = _get_page_index_for_spread(current_spread, true) # Current left flies
+			idx_anim_b = _get_page_index_for_spread(target_spread_idx, false) # Destination right lands
 	else:
 		# Standard Logic
 		if forward:
@@ -919,6 +1061,9 @@ func _on_animation_finished(_anim_name: String):
 		# Snap to the final target spread
 		if going_forward: current_spread = total_spreads
 		else: current_spread = -1
+	elif _is_jumping:
+		_is_jumping = false
+		current_spread = _jump_target_spread
 	else:
 		# Standard increment
 		if going_forward and current_spread == -1: current_spread = 0
