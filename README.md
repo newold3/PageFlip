@@ -160,6 +160,7 @@ You can call these functions on the `book` node (retrieved via `get_meta("_pagef
 | :--- | :--- | :--- | :--- |
 | `next_page()` | None | Triggers the animation to the next spread. | ⚠️ **Manual Return:** You **MUST** emit `signal("manage_pageflip", true)` BEFORE calling this. |
 | `prev_page()` | None | Triggers the animation to the previous spread. | ⚠️ **Manual Return:** You **MUST** emit `signal("manage_pageflip", true)` BEFORE calling this. |
+`go_to_page(index)` | `int` | Navigates to a specific spread (the page corresponds to the position in the array of pages starting at 1). | ⚠️ **Manual Return:** You **MUST** emit `signal("manage_pageflip", true)` BEFORE calling this. |
 | `force_close_book(to_front)` | `bool` | Closes the book animated. `true` = To Front Cover, `false` = To Back Cover. | ✅ **Automatic:** This function handles the input handshake internally. Safe to call directly. |
 | `current_spread` | (Property) | Returns the current index of the open pages. `-1` is closed front, `0` is first pages. | N/A |
 | `total_spreads` | (Property) | Returns the total number of spreads calculated from the content list. | N/A |
