@@ -103,11 +103,11 @@ static func go_to_spread(book: PageFlip2D, target_spread: int, animated: bool = 
 	# Clamp target
 	var final_target = clampi(target_spread, -1, book.total_spreads)
 	var diff = final_target - book.current_spread
-	
-	force_release_control(book)
 
 	if diff == 0:
 		return
+		
+	force_release_control(book)
 	
 	if not animated:
 		# INSTANT TELEPORT
@@ -126,7 +126,8 @@ static func go_to_spread(book: PageFlip2D, target_spread: int, animated: bool = 
 		# Base speed: 1.5x
 		# Increment: +0.5x per page
 		# Cap: 15.0x (Very fast zip)
-		var dynamic_speed = clampf(1.5 + (steps * 0.5), 1.5, 15.0)
+		var dynamic_speed = remap(abs(diff), 0, book.total_spreads, 1.5, 10)
+		#clampf(1.5 + (steps * 0.5), 1.5, 55.0) # old
 		book.anim_player.speed_scale = dynamic_speed
 		
 		var going_forward = diff > 0
@@ -169,7 +170,7 @@ static func go_to_page(book: PageFlip2D, page_num: int = 1, target: JumpTarget =
 			var safe_page = max(1, page_num)
 			target_spread_idx = int(safe_page / 2.0)
 			target_spread_idx = clampi(target_spread_idx, 0, book.total_spreads - 1)
-	
+			
 	await go_to_spread(book, target_spread_idx, animated)
 
 

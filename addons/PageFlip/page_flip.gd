@@ -293,17 +293,17 @@ func _apply_newold_config(val):
 	spine_texture = preload("uid://cit41jypw2sy1")
 	spine_width = 12.0
 	covers_are_rigid = true
-	closed_scale = Vector2(0.815, 0.23)
-	closed_skew = 0.2
+	closed_scale = Vector2(0.815, 0.45)
+	closed_skew = 0.05
 	closed_rotation = 0.1
-	open_scale = Vector2(1.0, 1.0)
+	open_scale = Vector2(1.0, 0.975)
 	open_skew = 0.0
 	open_rotation = 0.0
 	min_layers = 1
 	max_layers = 15
 	invert_stack_direction = false
-	layer_offset_closed = Vector2(0.7, 12.0)
-	layer_offset_open = Vector2(0.6, 2.0)
+	layer_offset_closed = Vector2(3.0, 6.5)
+	layer_offset_open = Vector2(4.0, 2.0)
 	volume_color = Color("#a6978f")
 	stripe_darken_ratio = 0.848
 	volume_stack_offset = Vector2(0, 0)
@@ -318,6 +318,7 @@ func _apply_newold_config(val):
 	tex_cover_back_in = preload("uid://dt1tiecgw5rip")
 	tex_cover_back_out = preload("uid://bjowpx1ap4uxt")
 	_apply_new_size()
+	dynamic_poly.animation_preset = DynamicPage.PagePreset.LIGHT_MAGAZINE
 	notify_property_list_changed()
 
 
@@ -349,6 +350,7 @@ func __init():
 	s_right.z_index = 1
 	var d_poly = __ensure_node("DynamicFlipPoly", Polygon2D, visual_cont)
 	d_poly.z_index = 10
+	d_poly.clip_children = Control.ClipChildrenMode.CLIP_CHILDREN_AND_DRAW
 	
 	if d_poly.get_script() == null:
 		d_poly.set_script(load("res://addons/PageFlip/page_rigger.gd"))
@@ -456,8 +458,6 @@ func _initial_config():
 	var screen_center = get_viewport().get_camera_2d().get_screen_center_position()
 	
 	# Ensure dynamic poly is hidden at start.
-	# We DO NOT set static pages visibility here, because _update_static_visuals_immediate()
-	# below will set it correctly based on current_spread.
 	_set_page_visible(dynamic_poly, false)
 	
 	_build_spine()
@@ -561,23 +561,31 @@ func _update_stack_direct(expansion_factor: float, visual_spread: float):
 	if _stack_scale_right <= 0.001: force_hide_right = true
 	if _force_hide_vol_left: force_hide_left = true
 	if _force_hide_vol_right: force_hide_right = true
+	
 	var left_threshold_idx = total_layers - count_left
 	var right_threshold_idx = total_layers - count_right
 
 	for i in range(total_layers):
 		var layer = _volume_root.get_child(i)
-		var reverse_multiplier = total_layers - i
-		var base_off_x = current_step.x * reverse_multiplier
-		var base_off_y = (current_step.y * reverse_multiplier) * y_dir
+		
+		var depth_multiplier = float(total_layers - i)
+		
+		var base_off_x = current_step.x * depth_multiplier
+		var base_off_y = (current_step.y * depth_multiplier) * y_dir
+		
 		layer.position = Vector2.ZERO
 		var l_node = layer.get_child(0)
 		var r_node = layer.get_child(1)
+		
 		var final_off_left = Vector2(-base_off_x, base_off_y) * _stack_scale_left
 		var final_off_right = Vector2(base_off_x, base_off_y) * _stack_scale_right
+		
 		var show_l = (i >= left_threshold_idx)
 		var show_r = (i >= right_threshold_idx)
+		
 		if force_hide_left: show_l = false
 		if force_hide_right: show_r = false
+		
 		if static_left:
 			l_node.position = static_left.position + final_off_left
 			l_node.visible = show_l
@@ -680,7 +688,6 @@ func _build_spine():
 
 
 func _set_page_visible(node: Node2D, show: bool):
-	# Simplified to immediate visibility to prevent race conditions during initialization
 	if node: node.visible = show
 
 
@@ -696,24 +703,29 @@ func _prepare_book_content():
 # ==============================================================================
 # INPUT
 # ==============================================================================
+func _inject_event_to_viewport(viewport: SubViewport, polygon: Polygon2D, event: InputEvent) -> void:
+	var mouse_pos = get_global_mouse_position()
+	var new_mouse_pos = polygon.to_local(mouse_pos)
+	new_mouse_pos.y += target_page_size.y / 2
+	var ev = event.duplicate_deep(Resource.DEEP_DUPLICATE_ALL)
+	ev.position = new_mouse_pos
+	ev.global_position = new_mouse_pos
+	viewport.push_input(ev, true)
+	var node = viewport.gui_get_hovered_control()
+	if node is Control:
+		var cursor_shape = node.get_default_cursor_shape()
+		DisplayServer.cursor_set_shape.call_deferred(cursor_shape)
+	else:
+		DisplayServer.cursor_set_shape.call_deferred(DisplayServer.CursorShape.CURSOR_ARROW)
+
+
 func _input(event):
 	if not _active_interactive_is_left and not _active_interactive_is_right: return
-	if event is InputEventMouse:
-		var mouse_pos = get_global_mouse_position()
+	if event is InputEventMouse or event is InputEventMouseMotion:
 		if _active_interactive_is_left:
-			var new_mouse_pos = static_left.to_local(mouse_pos)
-			new_mouse_pos.y += target_page_size.y / 2
-			var ev = event.duplicate_deep(Resource.DEEP_DUPLICATE_ALL)
-			ev.position = new_mouse_pos
-			ev.global_position = new_mouse_pos
-			_slot_1.push_input(ev)
+			_inject_event_to_viewport(_slot_1, static_left, event)
 		if _active_interactive_is_right:
-			var new_mouse_pos = static_right.to_local(mouse_pos)
-			new_mouse_pos.y += target_page_size.y / 2
-			var ev = event.duplicate_deep(Resource.DEEP_DUPLICATE_ALL)
-			ev.position = new_mouse_pos
-			ev.global_position = new_mouse_pos
-			_slot_2.push_input(ev)
+			_inject_event_to_viewport(_slot_2, static_right, event)
 	elif event is InputEventKey:
 		if _active_interactive_is_left: _slot_1.push_input(event.duplicate(true))
 		if _active_interactive_is_right: _slot_2.push_input(event.duplicate(true))
@@ -764,7 +776,7 @@ func _pageflip_set_input_enabled(give_control_to_book: bool):
 			_active_interactive_is_right = not give_control_to_book
 
 
-## Internal function (formerly go_to_page) that handles the actual jump logic 
+## Internal function (formerly go_to_page) that handles the actual jump logic 
 ## using specific spread indices.
 func _go_to_page(target_spread_idx: int) -> void:
 	if is_animating: return
@@ -841,17 +853,14 @@ func _start_animation(forward: bool):
 			target_spread_idx = -1
 			is_rigid_motion = covers_are_rigid; use_tween = true; is_book_open = false; closing_to_front = true; target_is_closed = true
 	elif _is_jumping:
-		# When jumping, we check if the TARGET spread is a closed state (covers)
 		target_spread_idx = _jump_target_spread
 		if target_spread_idx == -1:
 			is_rigid_motion = covers_are_rigid; use_tween = true; is_book_open = false; closing_to_front = true; target_is_closed = true
 		elif target_spread_idx == total_spreads:
 			is_rigid_motion = covers_are_rigid; use_tween = true; is_book_open = false; closing_to_back = true; target_is_closed = true
 		else:
-			# Standard jump between internal pages uses flexible animation
 			is_rigid_motion = false; use_tween = false; is_book_open = true; target_is_closed = false
 	else:
-		# Standard Sequential Animation
 		target_spread_idx = current_spread + 1 if forward else current_spread - 1
 		
 		if forward:
@@ -876,33 +885,28 @@ func _start_animation(forward: bool):
 	var idx_anim_a = -999; var idx_anim_b = -999
 	
 	if _is_force_closing:
-		if forward: # Closing to Back (Left to Right motion)
+		if forward:
 			idx_static_left = _get_page_index_for_spread(current_spread, true)
 			idx_static_right = -999
 			idx_anim_a = _get_page_index_for_spread(current_spread, false)
-			idx_anim_b = -103 # Back Cover Out
-		else: # Closing to Front (Right to Left motion)
+			idx_anim_b = -103
+		else:
 			idx_static_right = _get_page_index_for_spread(current_spread, false)
 			idx_static_left = -999
 			idx_anim_a = _get_page_index_for_spread(current_spread, true)
-			idx_anim_b = -100 # Front Cover Out
+			idx_anim_b = -100
 	elif _is_jumping:
-		if forward: # Jumping Forward
-			# Visual Logic: Lift the current Right page, Reveal the Target Right page.
-			# The back of the flying page becomes the Target Left page.
-			idx_static_left = _get_page_index_for_spread(current_spread, true) # Remains current left
-			idx_static_right = _get_page_index_for_spread(target_spread_idx, false) # Revealed destination right
-			idx_anim_a = _get_page_index_for_spread(current_spread, false) # Current right flies
-			idx_anim_b = _get_page_index_for_spread(target_spread_idx, true) # Destination left lands
-		else: # Jumping Backward
-			# Visual Logic: Lift the current Left page, Reveal the Target Left page.
-			# The front of the flying page becomes the Target Right page.
-			idx_static_left = _get_page_index_for_spread(target_spread_idx, true) # Revealed destination left
-			idx_static_right = _get_page_index_for_spread(current_spread, false) # Remains current right
-			idx_anim_a = _get_page_index_for_spread(current_spread, true) # Current left flies
-			idx_anim_b = _get_page_index_for_spread(target_spread_idx, false) # Destination right lands
+		if forward:
+			idx_static_left = _get_page_index_for_spread(current_spread, true)
+			idx_static_right = _get_page_index_for_spread(target_spread_idx, false)
+			idx_anim_a = _get_page_index_for_spread(current_spread, false)
+			idx_anim_b = _get_page_index_for_spread(target_spread_idx, true)
+		else:
+			idx_static_left = _get_page_index_for_spread(target_spread_idx, true)
+			idx_static_right = _get_page_index_for_spread(current_spread, false)
+			idx_anim_a = _get_page_index_for_spread(current_spread, true)
+			idx_anim_b = _get_page_index_for_spread(target_spread_idx, false)
 	else:
-		# Standard Logic
 		if forward:
 			idx_static_left = _get_page_index_for_spread(current_spread, true)
 			idx_static_right = _get_page_index_for_spread(target_spread_idx, false)
@@ -927,7 +931,6 @@ func _start_animation(forward: bool):
 	if closing_to_back: _set_page_visible.call_deferred(static_right, false)
 	elif closing_to_front: _set_page_visible.call_deferred(static_left, false)
 	
-	# --- ANIMATION SELECTION (Standard vs Mirror) ---
 	var base_anim_name = "turn_rigid_page" if is_rigid_motion else "turn_flexible_page"
 	var final_anim_name = base_anim_name if forward else base_anim_name + "_mirror"
 	
@@ -935,7 +938,6 @@ func _start_animation(forward: bool):
 	if anim_player.has_animation(final_anim_name):
 		anim_len = anim_player.get_animation(final_anim_name).length
 		anim_player.current_animation = final_anim_name
-		# Always seek to 0 because mirror animations are created to play forwards
 		anim_player.seek(0.0, true)
 
 	_set_page_visible.call_deferred(dynamic_poly, true); dynamic_poly.z_index = 10
@@ -952,14 +954,19 @@ func _start_animation(forward: bool):
 	var tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT).set_parallel(true)
 	var half_duration = motion_duration * 0.5
 	
-	# Stack thickness logic...
+	var overlap_factor = 0.8
+	var delay_time = half_duration * overlap_factor
+	var entry_duration = motion_duration - delay_time
+	
 	var start_thin_L = (current_spread <= 1)
 	var end_thin_L = (target_spread_idx <= 1)
 	
 	if start_thin_L and not end_thin_L:
-		_stack_scale_left = 0.0; tween.tween_property(self, "_stack_scale_left", 1.0, half_duration).set_delay(half_duration)
+		_stack_scale_left = 0.0
+		tween.tween_property(self, "_stack_scale_left", 1.0, entry_duration).set_delay(delay_time).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	elif not start_thin_L and end_thin_L:
-		_stack_scale_left = 1.0; tween.tween_property(self, "_stack_scale_left", 0.0, half_duration * 0.5)
+		_stack_scale_left = 1.0
+		tween.tween_property(self, "_stack_scale_left", 0.0, half_duration * 0.8)
 	elif start_thin_L and end_thin_L: _stack_scale_left = 0.0
 	else: _stack_scale_left = 1.0
 
@@ -967,9 +974,11 @@ func _start_animation(forward: bool):
 	var end_thin_R = (target_spread_idx >= total_spreads - 2)
 	
 	if start_thin_R and not end_thin_R:
-		_stack_scale_right = 0.0; tween.tween_property(self, "_stack_scale_right", 1.0, half_duration).set_delay(half_duration)
+		_stack_scale_right = 0.0
+		tween.tween_property(self, "_stack_scale_right", 1.0, entry_duration).set_delay(delay_time).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	elif not start_thin_R and end_thin_R:
-		_stack_scale_right = 1.0; tween.tween_property(self, "_stack_scale_right", 0.0, half_duration)
+		_stack_scale_right = 1.0
+		tween.tween_property(self, "_stack_scale_right", 0.0, half_duration * 0.8)
 	elif start_thin_R and end_thin_R: _stack_scale_right = 0.0
 	else: _stack_scale_right = 1.0
 	
@@ -982,7 +991,6 @@ func _start_animation(forward: bool):
 	
 	tween.tween_method(_tween_expansion_only.bind(), start_exp, end_exp, motion_duration)
 
-	# Play the selected animation normally (No play_backwards)
 	anim_player.play(final_anim_name)
 	
 	if is_rigid_motion:
@@ -1058,14 +1066,12 @@ func _on_animation_finished(_anim_name: String):
 	
 	if _is_force_closing:
 		_is_force_closing = false
-		# Snap to the final target spread
 		if going_forward: current_spread = total_spreads
 		else: current_spread = -1
 	elif _is_jumping:
 		_is_jumping = false
 		current_spread = _jump_target_spread
 	else:
-		# Standard increment
 		if going_forward and current_spread == -1: current_spread = 0
 		elif going_forward and current_spread == total_spreads - 1: current_spread = total_spreads
 		elif !going_forward and current_spread == total_spreads: current_spread = total_spreads - 1

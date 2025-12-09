@@ -1,4 +1,5 @@
 @tool
+class_name DynamicPage
 extends Polygon2D
 
 # ==============================================================================
@@ -69,10 +70,9 @@ var _custom_cache: Dictionary = {}
 @export_range(1, 20) var subdivision_x: int = 8
 ## Vertical mesh subdivision. Higher values allow for better corner curling.
 @export_range(1, 10) var subdivision_y: int = 5
-## Generates the mesh, skeleton, and weights.
-@export var generate_rig_btn: bool = false : set = _on_generate_pressed
-## Clears the current rig.
-@export var clear_rig_btn: bool = false : set = _on_clear_pressed
+## Generates the mesh, skeleton, weights and animations.
+@export var rebuild_all: bool = false : set = _on_generate_pressed
+
 
 @export_category("Animation Generator")
 
@@ -80,11 +80,13 @@ var _custom_cache: Dictionary = {}
 ## Select a material style to auto-configure physics.
 @export var animation_preset: PagePreset = PagePreset.CUSTOM : set = _on_preset_changed
 
+
 @export_group("Manual Configuration")
 ## The AnimationPlayer node to store the generated animations.
 @export var anim_player: AnimationPlayer
 ## Duration of the page turn animation in seconds.
 @export var anim_duration: float = 0.75
+
 
 @export_subgroup("Paper Physics")
 ## Stiffness of the material. 0.5 = Rubber, 5.0 = Wood.
@@ -94,23 +96,26 @@ var _custom_cache: Dictionary = {}
 ## Bend angle during the landing phase (Negative = Tip floats up).
 @export_range(-180.0, 180.0) var land_bend: float = -8.0
 
+
 @export_subgroup("Curl Effect")
 ## Which part of the page initiates the movement.
 @export var curl_mode: CurlMode = CurlMode.TOP_CORNER_FIRST
 ## Time delay for the trailing corner (0.0 = None, 1.0 = High lag).
 @export_range(0.0, 1.0, 0.05) var curl_lag: float = 0.8
 
+
 @export_subgroup("Shadow FX")
 ## Create a dynamic shadow behind the page.
 @export var enable_shadow: bool = true
 ## Adds a gradient overlay on the page face that expands from the spine.
 @export var enable_face_gradient: bool = true
-## Color of the shadows.
-@export var shadow_color: Color = Color(0, 0, 0, 0.5)
+## The gradient texture used for both the back shadow and the face shadow.
+@export var shadow_gradient: GradientTexture2D
 ## Maximum scale of the inner shadow (0.0 to 1.0) relative to page width when is animating.
 @export_range(0.1, 1.0) var face_shadow_spread: float = 0.68
 ## Percentage of the page width used to generate the gradient texture resolution.
 @export_range(0.1, 1.0) var face_shadow_max_size: float = 0.85
+
 
 @export_subgroup("Fine Timing")
 ## Normalized time (0.0 - 1.0) for the peak lift position.
@@ -166,38 +171,58 @@ func _on_preset_changed(val):
 	
 	match val:
 		PagePreset.DEFAULT:
-			paper_stiffness = 2.0; lift_bend = -10.0; land_bend = 8.0
-			curl_mode = CurlMode.TOP_CORNER_FIRST; curl_lag = 0.8
+			paper_stiffness = 2.0; lift_bend = -15.0; land_bend = -5.0
+			curl_mode = CurlMode.TOP_CORNER_FIRST; curl_lag = 0.5
+			anim_duration = 0.75; face_shadow_spread = 0.5
 			timing_peak_lift = 0.15; timing_peak_land = 0.85
+			
 		PagePreset.STANDARD_PAPER:
-			paper_stiffness = 1.8; lift_bend = -12.0; land_bend = 8.0
-			curl_mode = CurlMode.TOP_CORNER_FIRST; curl_lag = 0.6
-			anim_duration = 0.7
+			paper_stiffness = 2.5; lift_bend = -12.0; land_bend = -3.0
+			curl_mode = CurlMode.TOP_CORNER_FIRST; curl_lag = 0.4
+			anim_duration = 0.65; face_shadow_spread = 0.45
+			timing_peak_lift = 0.12; timing_peak_land = 0.88
+			
 		PagePreset.HEAVY_GRIMOIRE:
-			paper_stiffness = 3.5; lift_bend = -4.0; land_bend = 3.0
+			paper_stiffness = 4.0; lift_bend = -3.0; land_bend = -1.0
 			curl_mode = CurlMode.STRAIGHT; curl_lag = 0.1
-			anim_duration = 0.9; face_shadow_spread = 0.3
+			anim_duration = 1.1; face_shadow_spread = 0.25
+			timing_peak_lift = 0.25; timing_peak_land = 0.75
+			
 		PagePreset.LIGHT_MAGAZINE:
-			paper_stiffness = 0.8; lift_bend = -15.0; land_bend = 12.0
-			curl_lag = 0.5; anim_duration = 0.7; face_shadow_spread = 0.6
-		PagePreset.OLD_SCROLL:
-			paper_stiffness = 2.2; lift_bend = -14.0; land_bend = 10.0
-			curl_mode = CurlMode.TOP_CORNER_FIRST; curl_lag = 0.4; anim_duration = 0.8
-		PagePreset.RIGID_BOARD:
-			paper_stiffness = 5.0; lift_bend = 3; land_bend = -3
-			curl_mode = CurlMode.STRAIGHT; curl_lag = 0.0
-			enable_face_gradient = false
-		PagePreset.WET_CLOTH:
-			paper_stiffness = 0.5; lift_bend = -20.0; land_bend = 15.0
+			paper_stiffness = 0.8; lift_bend = -16.0; land_bend = -4.0
 			curl_mode = CurlMode.BOTTOM_CORNER_FIRST; curl_lag = 0.6
-			anim_duration = 0.9; face_shadow_spread = 0.7
-		PagePreset.PLASTIC_SHEET:
-			paper_stiffness = 3.0; lift_bend = -8.0; land_bend = 8.0
-			curl_mode = CurlMode.TOP_CORNER_FIRST; curl_lag = 0.1
-		PagePreset.METAL_PLATE:
-			paper_stiffness = 5.0; lift_bend = -1.0; land_bend = 1.0
+			anim_duration = 0.8; face_shadow_spread = 0.65
+			timing_peak_lift = 0.10; timing_peak_land = 0.92
+			
+		PagePreset.OLD_SCROLL:
+			paper_stiffness = 1.8; lift_bend = -20.0; land_bend = -8.0
+			curl_mode = CurlMode.TOP_CORNER_FIRST; curl_lag = 0.9
+			anim_duration = 0.9; face_shadow_spread = 0.6
+			timing_peak_lift = 0.18; timing_peak_land = 0.82
+			
+		PagePreset.RIGID_BOARD:
+			paper_stiffness = 5.0; lift_bend = 0.0; land_bend = 0.0
 			curl_mode = CurlMode.STRAIGHT; curl_lag = 0.0
-			enable_face_gradient = false; anim_duration = 1.2
+			anim_duration = 0.8; enable_face_gradient = false
+			timing_peak_lift = 0.2; timing_peak_land = 0.8
+			
+		PagePreset.WET_CLOTH:
+			paper_stiffness = 0.3; lift_bend = -35.0; land_bend = 2.5
+			curl_mode = CurlMode.BOTTOM_CORNER_FIRST; curl_lag = 0.7
+			anim_duration = 1.8; face_shadow_spread = 0.8
+			timing_peak_lift = 0.15; timing_peak_land = 0.69
+			
+		PagePreset.PLASTIC_SHEET:
+			paper_stiffness = 3.5; lift_bend = -10.0; land_bend = -8.0
+			curl_mode = CurlMode.TOP_CORNER_FIRST; curl_lag = 0.2
+			anim_duration = 0.5; face_shadow_spread = 0.3
+			timing_peak_lift = 0.08; timing_peak_land = 0.92
+			
+		PagePreset.METAL_PLATE:
+			paper_stiffness = 5.0; lift_bend = 0.0; land_bend = 0.0
+			curl_mode = CurlMode.STRAIGHT; curl_lag = 0.0
+			anim_duration = 1.5; enable_face_gradient = false
+			timing_peak_lift = 0.11; timing_peak_land = 0.58
 	
 	notify_property_list_changed()
 	if anim_player and skeleton != NodePath(""):
@@ -210,7 +235,7 @@ func _save_state_to_cache():
 		"stiffness": paper_stiffness, "lift": lift_bend, "land": land_bend,
 		"curl_m": curl_mode, "curl_l": curl_lag,
 		"t_lift": timing_peak_lift, "t_land": timing_peak_land,
-		"dur": anim_duration, "shadow": enable_shadow, 
+		"dur": anim_duration, "shadow": enable_shadow,
 		"grad": enable_face_gradient, "spread": face_shadow_spread,
 		"max_size": face_shadow_max_size
 	}
@@ -266,12 +291,27 @@ func _create_rig_logic(current_page_size: Vector2 = Vector2.ZERO):
 	var step_x = tex_size.x / subdivision_x
 	var step_y = tex_size.y / subdivision_y
 	
+	# Prepare Gradient Texture
+	var applied_shadow_tex: Texture2D = null
+	if not shadow_gradient:
+		shadow_gradient = preload("uid://rm7bporlv3cf")
+	var dup = shadow_gradient.duplicate()
+	if dup is GradientTexture2D:
+		dup.width = int(tex_size.x)
+	applied_shadow_tex = dup
+	
 	# --- 0. BACKGROUND SHADOW ---
 	if enable_shadow:
 		var shadow = Polygon2D.new()
 		shadow.name = SHADOW_NAME
 		shadow.z_index = -1
-		shadow.color = shadow_color
+		
+		if applied_shadow_tex:
+			shadow.texture = applied_shadow_tex
+			shadow.color = Color.WHITE
+		else:
+			shadow.color = Color(0, 0, 0, 0.5)
+			
 		var margin = 4.0
 		shadow.polygon = PackedVector2Array([
 			Vector2(margin, margin), Vector2(tex_size.x - margin, margin),
@@ -284,6 +324,7 @@ func _create_rig_logic(current_page_size: Vector2 = Vector2.ZERO):
 
 	# --- 1. MESH & UV ---
 	var new_uvs = PackedVector2Array()
+	# Create UVs / Vertices matching the grid exactly
 	for y in range(subdivision_y + 1):
 		for x in range(subdivision_x + 1):
 			new_uvs.append(Vector2(x * step_x, y * step_y))
@@ -306,59 +347,54 @@ func _create_rig_logic(current_page_size: Vector2 = Vector2.ZERO):
 		sk.owner = get_tree().edited_scene_root
 	self.skeleton = NodePath(SKELETON_NAME)
 	
-	# --- 3. BONES ---
+	# --- 3. BONES (Structured Hierarchy) ---
+	# We create rows of horizontal chains.
+	# Bone_0_y is the root for its row.
+	# Bone_1_y is child of Bone_0_y, etc.
 	for y in range(subdivision_y + 1):
-		var pb = null
+		var parent_bone: Bone2D = null
+		
 		for x in range(subdivision_x + 1):
 			var b = Bone2D.new()
 			b.name = "Bone_%d_%d" % [x, y]
 			b.set_autocalculate_length_and_angle(false)
 			b.set_length(step_x)
+			
 			if x == 0:
-				sk.add_child(b); b.position = Vector2(0, y * step_y)
+				# Root bone for this row (The Spine)
+				sk.add_child(b)
+				b.position = Vector2(0, y * step_y)
 			else:
-				pb.add_child(b); b.position = Vector2(step_x, 0)
+				# Child bone
+				if parent_bone:
+					parent_bone.add_child(b)
+				# Relative position to parent
+				b.position = Vector2(step_x, 0)
 			
 			if Engine.is_editor_hint() and get_tree().edited_scene_root:
 				b.owner = get_tree().edited_scene_root
+			
+			# IMPORTANT: Set rest pose to current layout to avoid deformation on init
 			b.set_rest(b.transform)
-			pb = b
+			parent_bone = b
 	
-	# --- 4. WEIGHTS ---
-	_apply_weights_to_polygon(self, sk, new_uvs.size())
+	# --- 4. WEIGHTS (Gradient Skinning) ---
+	_apply_weights_to_polygon(self, sk)
 	
 	# --- 5. GRADIENT OVERLAY (FACE SHADOW) ---
 	if enable_face_gradient:
 		var overlay = Polygon2D.new()
 		overlay.name = GRADIENT_NAME
-		overlay.z_index = 1 # On top of page
+		overlay.z_index = 0
 		
-		var grad_tex = GradientTexture2D.new()
-		grad_tex.height = 32
+		if applied_shadow_tex:
+			var top_applied_shadow_tex = applied_shadow_tex.duplicate()
+			top_applied_shadow_tex.width = top_applied_shadow_tex.width * face_shadow_max_size
+			overlay.texture = top_applied_shadow_tex
+			overlay.color = Color.WHITE
+		else:
+			overlay.color = Color(0, 0, 0, 0)
 		
-		# Calculates width based on the real polygon geometry + multiplier
-		var poly_rect = _calculate_polygon_rect()
-		var real_width = poly_rect.size.x
-		if real_width <= 0: real_width = 512 # Fallback
-		
-		grad_tex.width = int(real_width * face_shadow_max_size)
-
-		var grad = Gradient.new()
-		
-		var end_col = shadow_color
-		end_col.a = 0.0
-		
-		grad.colors = PackedColorArray([shadow_color, end_col]) 
-		grad.offsets = PackedFloat32Array([0.0, 1.0])
-		
-		grad_tex.gradient = grad
-		grad_tex.fill_from = Vector2(0, 0)
-		grad_tex.fill_to = Vector2(1, 0)
-		
-		overlay.texture = grad_tex
-		overlay.color = Color(1, 1, 1, 1)
-		
-		# Initialize scale to 0 (invisible)
 		overlay.scale = Vector2(0.001, 1.0)
 		
 		overlay.polygon = self.polygon
@@ -370,23 +406,72 @@ func _create_rig_logic(current_page_size: Vector2 = Vector2.ZERO):
 			overlay.owner = get_tree().edited_scene_root
 		
 		overlay.skeleton = NodePath("../" + SKELETON_NAME)
-		_apply_weights_to_polygon(overlay, sk, new_uvs.size())
+		_apply_weights_to_polygon(overlay, sk)
 
 	queue_redraw()
+	notify_property_list_changed()
 
 
-func _apply_weights_to_polygon(poly: Polygon2D, sk: Skeleton2D, vertex_count: int):
+func _apply_weights_to_polygon(poly: Polygon2D, sk: Skeleton2D):
 	poly.clear_bones()
-	var bi = 0
+	
+	var bone_map = {}
 	for y in range(subdivision_y + 1):
 		for x in range(subdivision_x + 1):
-			var bone_name = "Bone_%d_%d" % [x, y]
-			var ab = sk.find_child(bone_name, true, false)
-			if ab:
-				var w = PackedFloat32Array(); w.resize(vertex_count); w.fill(0.0)
-				w[bi] = 1.0
-				poly.add_bone(ab.get_path(), w)
-			bi += 1
+			var bname = "Bone_%d_%d" % [x, y]
+			var bone_node = sk.find_child(bname, true, false)
+			if bone_node:
+				bone_map[bname] = bone_node.get_path()
+
+	var vertex_count = poly.polygon.size()
+	
+	var weights_per_bone = {}
+	
+	for bpath in bone_map.values():
+		var w_arr = PackedFloat32Array()
+		w_arr.resize(vertex_count)
+		w_arr.fill(0.0)
+		weights_per_bone[bpath] = w_arr
+	
+	var vert_idx = 0
+	for y in range(subdivision_y + 1):
+		for x in range(subdivision_x + 1):
+			# This vertex belongs primarily to Bone_x_y
+			# But we want to bleed influence to x-1 and x+1 for smoothness
+			
+			var primary_name = "Bone_%d_%d" % [x, y]
+			var prev_name = "Bone_%d_%d" % [x - 1, y]
+			var next_name = "Bone_%d_%d" % [x + 1, y]
+			
+			var primary_path = bone_map.get(primary_name)
+			var prev_path = bone_map.get(prev_name)
+			var next_path = bone_map.get(next_name)
+			
+			# Configuration for Smooth Skinning
+			# 0.70 center, 0.15 neighbors = Smooth paper curve
+			var w_center = 0.7
+			var w_neighbor = 0.15
+			
+			if primary_path:
+				weights_per_bone[primary_path][vert_idx] += w_center
+			
+			if prev_path:
+				weights_per_bone[prev_path][vert_idx] += w_neighbor
+			else:
+				# If no previous bone (spine), add weight to center to keep sum ~1.0
+				weights_per_bone[primary_path][vert_idx] += w_neighbor
+				
+			if next_path:
+				weights_per_bone[next_path][vert_idx] += w_neighbor
+			else:
+				# If no next bone (edge), add weight to center
+				weights_per_bone[primary_path][vert_idx] += w_neighbor
+			
+			vert_idx += 1
+
+	# Apply the calculated weights to the polygon
+	for bpath in weights_per_bone:
+		poly.add_bone(bpath, weights_per_bone[bpath])
 
 
 # ==============================================================================
@@ -402,6 +487,7 @@ func _generate_animations_logic():
 	_create_single_anim(library, "turn_rigid_page", true, false)
 	_create_single_anim(library, "turn_flexible_page_mirror", false, true)
 	_create_single_anim(library, "turn_rigid_page_mirror", true, true)
+	notify_property_list_changed()
 
 
 func _create_single_anim(library: AnimationLibrary, anim_name: String, is_rigid: bool, is_mirror: bool):
@@ -417,14 +503,28 @@ func _create_single_anim(library: AnimationLibrary, anim_name: String, is_rigid:
 	
 	var my_path = anim_player.get_node(anim_player.root_node).get_path_to(self)
 	
-	# --- Z-INDEX ---
+	# Define Colors for Opacity Control
+	var visible_col = Color(1, 1, 1, 1)
+	var invisible_col = Color(1, 1, 1, 0)
+	var faded_col = Color(1, 1, 1, 0.6)
+	
+	# Common timings
+	var t_mid = anim_duration * 0.5
+	var t_end_snap = anim_duration * 0.95
+	
+	# ==========================================================================
+	# 1. VISIBILITY & Z-INDEX
+	# ==========================================================================
 	var z_track = anim.add_track(Animation.TYPE_VALUE)
 	anim.track_set_path(z_track, str(my_path) + ":z_index")
+	anim.track_set_interpolation_type(z_track, Animation.INTERPOLATION_NEAREST)
 	anim.track_insert_key(z_track, 0.0, 10)
-	anim.track_insert_key(z_track, anim_duration * 0.5, 25)
+	anim.track_insert_key(z_track, anim_duration * 0.15, 25)
 	anim.track_insert_key(z_track, anim_duration * 0.65, 10)
-	
-	# --- BACKGROUND SHADOW ---
+
+	# ==========================================================================
+	# 2. BACKGROUND SHADOW
+	# ==========================================================================
 	var shadow_node = find_child(SHADOW_NAME, true, false)
 	if shadow_node and enable_shadow:
 		var shadow_path = anim_player.get_node(anim_player.root_node).get_path_to(shadow_node)
@@ -434,21 +534,12 @@ func _create_single_anim(library: AnimationLibrary, anim_name: String, is_rigid:
 		var t_mod = anim.add_track(Animation.TYPE_VALUE)
 		anim.track_set_path(t_mod, str(shadow_path) + ":modulate")
 		
-		var start_col = shadow_color
-		var invisible_col = shadow_color; invisible_col.a = 0.0
-		var faded_col = shadow_color; faded_col.a *= 0.6
-		
 		var s_start = Vector2(-1.0, 1.0) if is_mirror else Vector2(1.0, 1.0)
 		var s_end = Vector2(1.0, 1.0) if is_mirror else Vector2(-1.0, 1.0)
 		
-		var t_mid = anim_duration * 0.5
-		var t_start_wait = anim_duration * 0.1
-		var t_end_snap = anim_duration * 0.9
-		
 		anim.track_insert_key(t_scale, 0.0, s_start)
-		anim.track_insert_key(t_scale, t_start_wait, s_start)
 		anim.track_insert_key(t_mod, 0.0, invisible_col)
-		anim.track_insert_key(t_mod, t_start_wait, start_col)
+		anim.track_insert_key(t_mod, anim_duration * 0.1, visible_col)
 		
 		anim.track_insert_key(t_scale, t_mid, Vector2(0.01, 1.0))
 		anim.track_insert_key(t_mod, t_mid, faded_col)
@@ -458,25 +549,41 @@ func _create_single_anim(library: AnimationLibrary, anim_name: String, is_rigid:
 		anim.track_insert_key(t_mod, t_end_snap, invisible_col)
 		anim.track_insert_key(t_mod, anim_duration, invisible_col)
 
-	# --- FACE GRADIENT (INTERNAL SHADOW) ---
+	# ==========================================================================
+	# 3. FACE GRADIENT (INTERNAL SHADOW)
+	# ==========================================================================
 	var gradient_node = find_child(GRADIENT_NAME, true, false)
 	if gradient_node and enable_face_gradient:
 		var grad_path = anim_player.get_node(anim_player.root_node).get_path_to(gradient_node)
 		
+		# 1. POLYGON SCALE TRACK
 		var t_poly_scale = anim.add_track(Animation.TYPE_VALUE)
 		anim.track_set_path(t_poly_scale, str(grad_path) + ":scale")
 		anim.track_set_interpolation_type(t_poly_scale, Animation.INTERPOLATION_CUBIC)
 		
-		var scale_zero = Vector2(0.001, 1.0) 
+		var scale_zero = Vector2(0.001, 1.0)
 		var scale_max = Vector2(face_shadow_spread, 1.0)
 		
 		anim.track_insert_key(t_poly_scale, 0.0, scale_zero)
 		anim.track_insert_key(t_poly_scale, anim_duration * 0.25, scale_zero)
-		anim.track_insert_key(t_poly_scale, anim_duration * 0.5, scale_max)
+		anim.track_insert_key(t_poly_scale, t_mid, scale_max)
 		anim.track_insert_key(t_poly_scale, anim_duration * 0.75, scale_zero)
 		anim.track_insert_key(t_poly_scale, anim_duration, scale_zero)
+		
+		# 3. MODULATE (Opacity) TRACK
+		var t_poly_mod = anim.add_track(Animation.TYPE_VALUE)
+		anim.track_set_path(t_poly_mod, str(grad_path) + ":modulate")
+		anim.track_set_interpolation_type(t_poly_mod, Animation.INTERPOLATION_CUBIC)
+		
+		anim.track_insert_key(t_poly_mod, 0.0, invisible_col)
+		anim.track_insert_key(t_poly_mod, anim_duration * 0.25, invisible_col)
+		anim.track_insert_key(t_poly_mod, t_mid, visible_col)
+		anim.track_insert_key(t_poly_mod, anim_duration * 0.9, invisible_col)
+		anim.track_insert_key(t_poly_mod, anim_duration, invisible_col)
 
-	# --- BONE ANIMATION ---
+	# ==========================================================================
+	# 4. BONE ANIMATION
+	# ==========================================================================
 	for y in range(subdivision_y + 1):
 		var row_factor = 1.0
 		if not is_rigid and curl_mode != CurlMode.STRAIGHT:
@@ -514,8 +621,8 @@ func _create_single_anim(library: AnimationLibrary, anim_name: String, is_rigid:
 				var x_ratio = float(x) / float(subdivision_x)
 				var influence = pow(x_ratio, paper_stiffness)
 				var t_lift = clamp((anim_duration * timing_peak_lift) + time_offset, 0.0, (anim_duration * 0.5) - 0.05)
-				var t_mid_t = anim_duration * 0.5
-				var t_land = clamp((anim_duration * timing_peak_land) - time_offset, t_mid_t + 0.05, anim_duration)
+				var t_mid_bone = anim_duration * 0.5
+				var t_land = clamp((anim_duration * timing_peak_land) - time_offset, t_mid_bone + 0.05, anim_duration)
 				
 				if x == 0:
 					var s = deg_flat_left if is_mirror else deg_flat_right
@@ -524,18 +631,51 @@ func _create_single_anim(library: AnimationLibrary, anim_name: String, is_rigid:
 					if is_mirror: sl = deg_flat_left - sl
 					var slt = lerp(-90.0, -180.0, timing_peak_land)
 					if is_mirror: slt = lerp(-90.0, 0.0, timing_peak_land)
+					
 					anim.track_insert_key(t_idx, 0.0, s)
 					anim.track_insert_key(t_idx, t_lift, sl)
-					anim.track_insert_key(t_idx, t_mid_t, deg_mid)
+					anim.track_insert_key(t_idx, t_mid_bone, deg_mid)
 					anim.track_insert_key(t_idx, t_land, slt)
+					
+					# Smoothing end
+					var t_settle = lerp(t_land, anim_duration, 0.7)
+					var s_settle = lerp(slt, e, 0.85)
+					anim.track_insert_key(t_idx, t_settle, s_settle)
+					
 					anim.track_insert_key(t_idx, anim_duration, e)
 				else:
 					var bm = -1.0 if is_mirror else 1.0
 					anim.track_insert_key(t_idx, 0.0, 0.0)
 					anim.track_insert_key(t_idx, t_lift, lift_bend * row_factor * bm * influence)
-					anim.track_insert_key(t_idx, t_mid_t, 0.0)
-					anim.track_insert_key(t_idx, t_land, land_bend * row_factor * bm * influence)
+					anim.track_insert_key(t_idx, t_mid_bone, 0.0)
+					
+					var val_land = land_bend * row_factor * bm * influence
+					anim.track_insert_key(t_idx, t_land, val_land)
+					
+					var t_settle = lerp(t_land, anim_duration, 0.75)
+					anim.track_insert_key(t_idx, t_settle, val_land * 0.15)
+					
 					anim.track_insert_key(t_idx, anim_duration, 0.0)
+
+	# ==========================================================================
+	# 5. MAIN POLYGON SCALE ("SQUASH & STRETCH")
+	# ==========================================================================
+	# Only applied to flexible pages to simulate organic deformation
+	if not is_rigid:
+		var t_main_scale = anim.add_track(Animation.TYPE_VALUE)
+		anim.track_set_path(t_main_scale, str(my_path) + ":scale")
+		
+		anim.track_set_interpolation_type(t_main_scale, Animation.INTERPOLATION_LINEAR)
+		
+		var squash_x = 0.88
+		
+		anim.track_insert_key(t_main_scale, 0.0, Vector2(1, 1))
+		anim.track_insert_key(t_main_scale, t_mid, Vector2(1, 1))
+		
+		anim.track_insert_key(t_main_scale, t_mid + (anim_duration * 0.1), Vector2(squash_x, 1))
+
+		anim.track_insert_key(t_main_scale, anim_duration * 0.85, Vector2(1, 1))
+		anim.track_insert_key(t_main_scale, anim_duration, Vector2(1, 1))
 
 	var method_track = anim.add_track(Animation.TYPE_METHOD)
 	anim.track_set_path(method_track, str(my_path))
@@ -553,15 +693,10 @@ func _trigger_end(): emit_signal("end_animation")
 
 func _on_generate_pressed(val):
 	if val:
-		generate_rig_btn=false
+		rebuild_all=false
 		_clean_previous_rig()
 		_create_rig_logic()
-
-
-func _on_clear_pressed(val):
-	if val:
-		clear_rig_btn=false
-		_clean_previous_rig()
+		_generate_animations_logic()
 
 
 func _on_anim_pressed(val):
