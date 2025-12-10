@@ -26,6 +26,7 @@ You can render static textures, animated videos, or **fully functional interacti
 * **Composite Pages:** Native support for transparent `.png` images that automatically blend over the paper texture.
 * **Physics Rigger:** Built-in `PageRigger` tool generates `Skeleton2D` and `Polygon2D` meshes automatically.
 * **Input Handshake:** Automatic system to handle input focus between the Book controller and interactive page content.
+* **Book Input:** You can turn the book’s pages using the left and right arrow keys, and by clicking on the page you want to flip.
 
 ---
 
