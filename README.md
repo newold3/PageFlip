@@ -166,6 +166,165 @@ You can call these functions on the `book` node (retrieved via `get_meta("_pagef
 | `current_spread` | (Property) | Returns the current index of the open pages. `-1` is closed front, `0` is first pages. | N/A |
 | `total_spreads` | (Property) | Returns the total number of spreads calculated from the content list. | N/A |
 
+
+# 🔌 External API (BookAPI)
+
+The `BookAPI` is a static utility class that provides helper methods to configure the book and facilitate interaction from embedded scenes. It's not required for PageFlip2D to work, but greatly simplifies common tasks.
+
+## Setup
+
+Place the `BookAPI.gd` script in your PageFlip2D addon folder. You can then use it in your scripts by calling `BookAPI.function_name(parameters)`.
+
+## Enums
+
+### JumpTarget
+
+Used to specify where to jump when navigating to a page.
+
+```gdscript
+enum JumpTarget {
+    FRONT_COVER,     # Jump to the front cover
+    BACK_COVER,      # Jump to the back cover
+    CONTENT_PAGE     # Jump to a specific content page
+}
+```
+
+## Configuration Functions
+
+### configure_visuals(book, data)
+
+Configures the visual properties of a Book instance via a dictionary. Useful for setting up book appearance in one call.
+
+```gdscript
+BookAPI.configure_visuals(book, {
+    "pages": ["res://page1.png", "res://page2.tscn"],
+    "cover_front_out": preload("res://cover_front.png"),
+    "cover_front_in": preload("res://cover_inner.png"),
+    "cover_back_in": preload("res://back_inner.png"),
+    "cover_back_out": preload("res://back_cover.png"),
+    "spine_col": Color.BLACK,
+    "spine_width": 10,
+    "size": Vector2(800, 600)
+})
+```
+
+**Accepted keys:**
+
+- `pages` - Array of page paths (images or scenes)
+- `cover_front_out` - Front cover outer texture
+- `cover_front_in` - Front cover inner texture
+- `cover_back_in` - Back cover inner texture
+- `cover_back_out` - Back cover outer texture
+- `spine_col` - Color of the book spine
+- `spine_width` - Width of the spine in pixels
+- `size` - Page size as Vector2
+
+### configure_physics(book, data)
+
+Configures the physics simulation of the page turning effect. Pass a dictionary with physics properties to customize how pages bend and deform.
+
+```gdscript
+BookAPI.configure_physics(book, {
+    "bend_strength": 0.8,
+    "follow_speed": 8.0,
+    "stiffness": 0.5
+})
+```
+
+## Interactive Scene Functions
+
+### find_book_controller(caller_node)
+
+Locates the PageFlip2D controller ancestor from any node inside an interactive page. Returns the PageFlip2D instance or null.
+
+```gdscript
+var book = BookAPI.find_book_controller(self)
+if book:
+    print("Found book controller!")
+```
+
+### set_interaction_lock(book, locked)
+
+Safely locks or unlocks the book's ability to turn pages manually. When locked, the interactive scene is responsible for unlocking it.
+
+> **WARNING:** If locked, the interactive scene MUST unlock it later, or call `go_to_spread()` which forces an unlock at the end.
+
+```gdscript
+# Lock the book while a puzzle is in progress
+BookAPI.set_interaction_lock(book, true)
+
+# Unlock when done
+BookAPI.set_interaction_lock(book, false)
+```
+
+### force_release_control(book)
+
+Forces the book to regain input control immediately. Useful as a failsafe if an interactive scene closes unexpectedly.
+
+```gdscript
+BookAPI.force_release_control(book)
+```
+
+## Navigation Functions
+
+### go_to_spread(book, target_spread, animated)
+
+**ASYNC:** Must be called with `await` if `animated` is true. Navigates to a specific spread (a two-page view).
+
+```gdscript
+# Jump to spread 3 instantly
+BookAPI.go_to_spread(book, 3, false)
+
+# Animate to spread 5 (must be awaited)
+await BookAPI.go_to_spread(book, 5, true)
+```
+
+**Parameters:**
+
+- `book` - The PageFlip2D instance
+- `target_spread` - The spread index (-1 = front cover, 0 = first pages, etc.)
+- `animated` - If true, animates with dynamic speed; if false, snaps instantly
+
+**Behavior:**
+
+- **Animated:** Fast-forwards through pages with dynamic speed (faster for longer distances) and restores control at the end.
+- **Instant:** Snaps to page immediately and triggers the scene activation handshake.
+
+### go_to_page(book, page_num, target, animated)
+
+**ASYNC:** Must be called with `await` if `animated` is true. Navigates to a specific page number (1-based index). Acts as a wrapper for `go_to_spread`.
+
+```gdscript
+# Jump to page 1 (front cover)
+await BookAPI.go_to_page(book, 1, BookAPI.JumpTarget.FRONT_COVER, true)
+
+# Jump to page 5 of content
+await BookAPI.go_to_page(book, 5, BookAPI.JumpTarget.CONTENT_PAGE, true)
+
+# Jump to back cover instantly
+BookAPI.go_to_page(book, 1, BookAPI.JumpTarget.BACK_COVER, false)
+```
+
+**Parameters:**
+
+- `book` - The PageFlip2D instance
+- `page_num` - The 1-based page number (ignored for covers)
+- `target` - The target type: `FRONT_COVER`, `BACK_COVER`, or `CONTENT_PAGE`
+- `animated` - Whether to animate the transition
+
+> **Note:** Spread 0 usually shows Page 1 on the right and Page 2 on the left. The function automatically calculates which spread to jump to based on the page number.
+
+### is_busy(book)
+
+Checks if the book is currently playing a page-turn animation. Returns true if animating, false otherwise.
+
+```gdscript
+if not BookAPI.is_busy(book):
+    print("Book is ready for input!")
+else:
+    print("Book is still animating...")
+```
+
 ---
 
 ## 🛠️ Dependencies
