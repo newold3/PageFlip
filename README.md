@@ -4,7 +4,7 @@ A robust, "Fake 3D" book system for Godot Engine
 
 📄 MIT License | 🎮 Godot 4.x
 
-> Click to watch a demo video on YouTube <a href="https://www.youtube.com/watch?v=uvx7dPstcvg" alt="Click to watch on YouTube">Link</a>
+> Click to watch a demo video on YouTube <a href="https://www.youtube.com/watch?v=pEiBL-oljus" alt="Click to watch on YouTube">Link</a>
 <div align="center">
   <table>
       <tr>
