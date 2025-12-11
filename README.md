@@ -7,7 +7,12 @@ A robust, "Fake 3D" book system for Godot Engine
 > Click on the image below to watch a demo video on YouTube
 <div align="center">
   <a href="https://www.youtube.com/watch?v=uvx7dPstcvg" alt="Click to watch on YouTube">
-    <img src="https://i.ibb.co/yn3cKH0K/preview-ezgif-com-speed.gif" border="0">
+    <table>
+      <tr>
+        <td><img src="https://i.ibb.co/yn3cKH0K/preview-ezgif-com-speed.gif" border="0"></td>
+        <td><img src="https://i.ibb.co/xqdYFpww/ezgif-com-optimize.gif" alt="ezgif com optimize" border="0"></td>
+      </tr>
+    </table>
   </a>
 </div>
 
