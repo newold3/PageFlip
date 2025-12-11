@@ -373,12 +373,6 @@ BookAPI.configure_physics(my_book, {
 })
 ```
 
-## 🛠️ Dependencies
-
-None
-
----
-
 ## 📄 License
 
 MIT License
