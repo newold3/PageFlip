@@ -373,17 +373,9 @@ BookAPI.configure_physics(my_book, {
 })
 ```
 
----
-
-## 🛠️ Helper Functions
-
-*Documentation for additional helper functions would go here.*
-
----
-
 ## 🛠️ Dependencies
 
-*List of dependencies would go here.*
+None
 
 ---
 
